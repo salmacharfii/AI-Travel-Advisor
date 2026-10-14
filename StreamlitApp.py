@@ -51,7 +51,7 @@ def plan_to_markdown(p: trip) -> str:
             f"## Practical Tips\n{p.tips}\n\n## Estimated Budget\n{p.budget}")
 
 
-client = OpenAI()  # reads OPENAI_API_KEY from the environment
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # --- Session state (survives Streamlit reruns) ---
 if "history" not in st.session_state:
