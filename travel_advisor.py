@@ -7,9 +7,9 @@ Setup (Windows):
 """
 
 import base64
+import os
 from typing import Optional
 
-import streamlit as st
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
@@ -51,32 +51,7 @@ def plan_to_markdown(p: trip) -> str:
             f"## Practical Tips\n{p.tips}\n\n## Estimated Budget\n{p.budget}")
 
 
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
-# --- Session state (survives Streamlit reruns) ---
-if "history" not in st.session_state:
-    st.session_state.history = [{"role": "system", "content": SYSTEM_PROMPT}]
-    st.session_state.display = []  # what we show: {"role", "text", "plan_md"}
-    st.session_state.usage = {"input": 0, "output": 0}
-    st.session_state.last_plan = None
-    st.session_state.image = None
-
-ss = st.session_state
-
-
-def chat(user_text: str) -> Reply:
-    ss.history.append({"role": "user", "content": user_text})
-    response = client.chat.completions.parse(
-        model=MODEL,
-        messages=ss.history,
-        response_format=Reply,
-        max_tokens=2000,
-    )
-    ss.usage["input"] += response.usage.prompt_tokens
-    ss.usage["output"] += response.usage.completion_tokens
-    ss.history.append({"role": "assistant", "content": response.choices[0].message.content})
-    return response.choices[0].message.parsed
-
+client = OpenAI()
 
 def make_image_bytes(plan_text: str) -> bytes:
     p = client.chat.completions.create(
@@ -94,40 +69,41 @@ def make_image_bytes(plan_text: str) -> bytes:
     return base64.b64decode(img.data[0].b64_json)
 
 
-# --- UI ---
-st.title("✈️ Travel Planner")
+class TravelAdvisor:
+    """Handles conversations with the AI Travel Advisor."""
+    def __init__(self):
+            api_key = os.getenv("OPENAI_API_KEY")
+    
+            if not api_key:
+                raise ValueError(
+                    "OPENAI_API_KEY is missing. "
+                    "Add it to your .env file."
+                )
+    
+            self.client = OpenAI(api_key=api_key)
 
-with st.sidebar:
-    u = ss.usage
-    cost = u["input"] / 1e6 * PRICE_IN + u["output"] / 1e6 * PRICE_OUT
-    st.metric("Input tokens", u["input"])
-    st.metric("Output tokens", u["output"])
-    st.metric("Est. cost (USD)", f"${cost:.5f}")
-    if st.button("New conversation"):
-        st.session_state.clear()
-        st.rerun()
+    def get_response(self, user_text: str, previous_response_id: str | None = None,)-> tuple[Reply, str]:
+        request = {
+                    "model": MODEL,
+                    "text_format":Reply,
+                    "instructions": SYSTEM_PROMPT,
+                    "input": user_text,
+                }
+        if previous_response_id:
+            request["previous_response_id"] = previous_response_id
 
-for m in ss.display:
-    with st.chat_message(m["role"]):
-        st.markdown(m["text"])
-        if m.get("plan_md"):
-            st.markdown(m["plan_md"])
+        response = self.client.responses.parse(**request)
+        return response.output_parsed , response.id
 
-if ss.image:
-    st.image(ss.image, width=500)
 
-if ss.last_plan and st.button("🎨 Create image"):
-    with st.spinner("Generating image..."):
-        ss.image = make_image_bytes(ss.last_plan)
-    st.rerun()
 
-if user_text := st.chat_input("Where do you want to go?"):
-    ss.display.append({"role": "user", "text": user_text})
-    with st.spinner("Thinking..."):
-        reply = chat(user_text)
-    plan_md = plan_to_markdown(reply.plan) if reply.plan else None
-    if plan_md:
-        ss.last_plan = plan_md
-        ss.image = None
-    ss.display.append({"role": "assistant", "text": reply.message, "plan_md": plan_md})
-    st.rerun()
+
+
+
+
+
+
+
+
+
+
