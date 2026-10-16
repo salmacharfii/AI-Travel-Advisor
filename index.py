@@ -3,8 +3,11 @@ from fastapi import FastAPI, HTTPException, status
 from openai import OpenAIError
 from pydantic import BaseModel, Field
 
-from travel_advisor import TravelAdvisor, plan_to_markdown
+from fastapi import Response
+from travel_advisor import TravelAdvisor, plan_to_markdown, make_image_bytes
 
+from pathlib import Path
+from fastapi.responses import HTMLResponse
 
 load_dotenv()
 
@@ -30,6 +33,30 @@ class ChatResponse(BaseModel):
     plan: str | None = None
     response_id: str
 
+class ImageRequest(BaseModel):
+    plan_text: str
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def home() -> str:
+    return (Path(__file__).parent / "index.html").read_text(encoding="utf-8")
+
+@app.post("/image")
+def create_image(request: ImageRequest) -> Response:
+    """Generate a travel poster (PNG) from a trip plan."""
+
+    plan_text = request.plan_text.strip()
+    if not plan_text:
+        raise HTTPException(status_code=422, detail="plan_text must not be blank.")
+
+    try:
+        image_bytes = make_image_bytes(plan_text)
+    except OpenAIError as error:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The AI provider could not generate the image.",
+        ) from error
+
+    return Response(content=image_bytes, media_type="image/png")
 
 @app.get("/health")
 def health() -> dict[str, str]:

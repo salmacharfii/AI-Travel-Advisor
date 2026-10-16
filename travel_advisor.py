@@ -57,14 +57,23 @@ def make_image_bytes(plan_text: str) -> bytes:
     p = client.chat.completions.create(
         model=MODEL,
         messages=[{"role": "user", "content":
-                   "Write a one-paragraph prompt for a beautiful travel poster "
-                   "illustration based on this trip plan:\n\n" + plan_text}],
+                   "Write a one-paragraph prompt for a beautiful portrait travel "
+                   "poster illustration based on this trip plan. Use a 2:3 vertical "
+                   "composition with a wide establishing view. Keep the complete "
+                   "landmark and scene inside the frame with clear space around "
+                   "important details; avoid close-ups and cut-off edges.\n\n"
+                   + plan_text}],
         max_tokens=200,
     )
     img = client.images.generate(
         model="gpt-image-1",
-        prompt=p.choices[0].message.content,
-        size="1024x1024",
+        prompt=(
+            f"{p.choices[0].message.content}\n\n"
+            "Portrait 2:3 travel poster. Show the complete scene and landmarks "
+            "fully within the frame, with breathing room at every edge. Do not "
+            "crop off buildings, people, or other important details."
+        ),
+        size="1024x1536",
     )
     return base64.b64decode(img.data[0].b64_json)
 
@@ -94,7 +103,6 @@ class TravelAdvisor:
 
         response = self.client.responses.parse(**request)
         return response.output_parsed , response.id
-
 
 
 
